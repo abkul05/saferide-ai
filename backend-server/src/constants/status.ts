@@ -1,0 +1,39 @@
+export enum UserRole {
+  PASSENGER = 'PASSENGER',
+  DRIVER = 'DRIVER',
+  ADMIN = 'ADMIN'
+}
+
+export enum DriverStatus {
+  AVAILABLE = 'AVAILABLE',
+  BUSY = 'BUSY',
+  OFFLINE = 'OFFLINE'
+}
+
+export enum RideStatus {
+  REQUESTED = 'REQUESTED',
+  ACCEPTED = 'ACCEPTED',
+  EN_ROUTE_TO_PICKUP = 'EN_ROUTE_TO_PICKUP',
+  ARRIVED = 'ARRIVED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED'
+}
+
+export enum AlertTriggerType {
+  ROUTE_DEVIATION = 'ROUTE_DEVIATION',
+  PANIC_BUTTON = 'PANIC_BUTTON',
+  SILENT_AUDIO_ALERT = 'SILENT_AUDIO_ALERT'
+}
+
+export enum AlertSeverity {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH'
+}
+
+export enum AlertStatus {
+  ACTIVE = 'ACTIVE',
+  RESOLVED = 'RESOLVED',
+  FALSE_ALARM = 'FALSE_ALARM'
+}
