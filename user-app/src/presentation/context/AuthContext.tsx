@@ -1,5 +1,14 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { apiCall, setAuthTokenInCache, loadAuthTokenFromStorage } from '../../data/api';
+import { auth } from '../../config/firebase';
+import { 
+  signInWithPhoneNumber, 
+  signOut, 
+  onAuthStateChanged, 
+  User as FirebaseUser,
+  ConfirmationResult,
+  ApplicationVerifier
+} from 'firebase/auth';
 
 export interface IEmergencyContact {
   name: string;
@@ -23,7 +32,7 @@ interface AuthContextType {
   isLoading: boolean;
   otpSent: boolean;
   phoneNumber: string;
-  sendOTP: (phone: string) => Promise<boolean>;
+  sendOTP: (phone: string, appVerifier: ApplicationVerifier) => Promise<boolean>;
   verifyOTP: (code: string) => Promise<boolean>;
   completeProfile: (name: string, email: string) => Promise<boolean>;
   updateEmergencyContacts: (contacts: IEmergencyContact[]) => Promise<boolean>;
@@ -38,64 +47,127 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [otpSent, setOtpSent] = useState<boolean>(false);
   const [phoneNumber, setPhoneNumber] = useState<string>('');
+  
+  // Track Firebase confirmation resolver reference
+  const [confirmResult, setConfirmResult] = useState<ConfirmationResult | null>(null);
 
+  // 1. Persistent Login: Monitor Firebase Auth State Changed
   useEffect(() => {
-    checkActiveSession();
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      try {
+        if (firebaseUser) {
+          console.log('Firebase persistent session found:', firebaseUser.uid);
+          const customToken = await loadAuthTokenFromStorage();
+          
+          if (customToken) {
+            // Verify and load profile with backend server
+            const res = await apiCall('/users/profile', 'GET');
+            if (res.success && res.user) {
+              setUser(res.user);
+              setIsAuthenticated(true);
+            } else {
+              // Custom JWT token expired: re-verify session
+              await reauthenticateSession(firebaseUser);
+            }
+          } else {
+            // No custom token: re-authenticate session
+            await reauthenticateSession(firebaseUser);
+          }
+        } else {
+          // No active session
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+      } catch (error) {
+        console.warn('Error verifying persistent session:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const checkActiveSession = async () => {
+  // Helper to re-verify Firebase session with Backend and get custom JWT
+  const reauthenticateSession = async (firebaseUser: FirebaseUser) => {
     try {
-      const storedToken = await loadAuthTokenFromStorage();
-      if (storedToken) {
-        // Query profile from database
-        const res = await apiCall('/users/profile', 'GET');
-        if (res.success && res.user) {
-          setUser(res.user);
-          setIsAuthenticated(true);
-        } else {
-          // Token expired or invalid
-          await setAuthTokenInCache(null);
-        }
+      const firebaseIdToken = await firebaseUser.getIdToken();
+      const res = await apiCall('/auth/otp/verify', 'POST', {
+        firebaseIdToken,
+        role: 'PASSENGER'
+      });
+
+      if (res.success && res.accessToken && res.user) {
+        await setAuthTokenInCache(res.accessToken);
+        setUser(res.user);
+        setIsAuthenticated(true);
+      } else {
+        await logout();
       }
     } catch {
-      // Offline fallback
-    } finally {
-      setIsLoading(false);
+      await logout();
     }
   };
 
-  const sendOTP = async (phone: string): Promise<boolean> => {
+  // 2. Dispatch OTP code via Firebase Client SDK
+  const sendOTP = async (phone: string, appVerifier: ApplicationVerifier): Promise<boolean> => {
     setIsLoading(true);
     setPhoneNumber(phone);
     
-    // Simulate SMS dispatch API delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setOtpSent(true);
-    setIsLoading(false);
-    return true;
+    try {
+      // Direct Firebase Client SMS dispatch call
+      const confirmation = await signInWithPhoneNumber(auth, phone, appVerifier);
+      setConfirmResult(confirmation);
+      setOtpSent(true);
+      setIsLoading(false);
+      return true;
+    } catch (error: any) {
+      console.error('Firebase sendOTP Error:', error.message);
+      setIsLoading(false);
+      throw error; // Propagate to view controller for screen error handling
+    }
   };
 
+  // 3. Confirm OTP and fetch ID Token
   const verifyOTP = async (code: string): Promise<boolean> => {
     setIsLoading(true);
     
-    // Call our backend Auth Verify using the mock phone token format
-    const mockToken = `mock-token-${phoneNumber}`;
-    
-    const res = await apiCall('/auth/otp/verify', 'POST', {
-      firebaseIdToken: mockToken,
-      role: 'PASSENGER'
-    });
+    try {
+      if (!confirmResult) {
+        throw new Error('Verification session not initialized. Re-enter phone.');
+      }
 
-    if (res.success && res.accessToken && res.user) {
-      await setAuthTokenInCache(res.accessToken);
-      setUser(res.user);
-      setIsAuthenticated(true);
+      // Verify SMS code using confirmation resolver
+      const userCredential = await confirmResult.confirm(code);
+      
+      if (!userCredential.user) {
+        throw new Error('Authentication returned empty credentials.');
+      }
+
+      // Get verified Firebase ID Token string
+      const firebaseIdToken = await userCredential.user.getIdToken();
+
+      // Submit token to backend server to get Custom JWT
+      const res = await apiCall('/auth/otp/verify', 'POST', {
+        firebaseIdToken,
+        role: 'PASSENGER'
+      });
+
+      if (res.success && res.accessToken && res.user) {
+        await setAuthTokenInCache(res.accessToken);
+        setUser(res.user);
+        setIsAuthenticated(true);
+        setIsLoading(false);
+        return true;
+      }
+
       setIsLoading(false);
-      return true;
+      return false;
+    } catch (error: any) {
+      console.error('Firebase verifyOTP Error:', error.message);
+      setIsLoading(false);
+      throw error;
     }
-
-    setIsLoading(false);
-    return false;
   };
 
   const completeProfile = async (name: string, email: string): Promise<boolean> => {
@@ -128,13 +200,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false;
   };
 
+  // 4. Logout Session
   const logout = async () => {
     setIsLoading(true);
-    await setAuthTokenInCache(null);
-    setUser(null);
-    setIsAuthenticated(false);
-    setOtpSent(false);
-    setIsLoading(false);
+    try {
+      await signOut(auth);
+      await setAuthTokenInCache(null);
+      setUser(null);
+      setIsAuthenticated(false);
+      setOtpSent(false);
+      setConfirmResult(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

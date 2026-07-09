@@ -1,9 +1,20 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { StyleSheet, View, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Text, TextInput, Button, useTheme, Card } from 'react-native-paper';
 import { useAuth } from '../../context/AuthContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
+import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
+
+// Configuration parameter for reCAPTCHA modal init
+const firebaseConfig = {
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyMockAPIKeyHereForTestingPurposes",
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "saferide-ai-mock.firebaseapp.com",
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "saferide-ai-mock",
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "saferide-ai-mock.appspot.com",
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "123456789012",
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "1:123456789012:web:mockappid123456789"
+};
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
@@ -19,8 +30,10 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [error, setError] = useState('');
   const [isSubmitLoading, setIsSubmitLoading] = useState(false);
 
+  // Reference hook to reCAPTCHA modal
+  const recaptchaVerifier = useRef<any>(null);
+
   const validatePhone = (phone: string): boolean => {
-    // E.164 verification format (e.g. +12345678901)
     const phoneRegex = /^\+[1-9]\d{1,14}$/;
     return phoneRegex.test(phone);
   };
@@ -41,14 +54,16 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
 
     setIsSubmitLoading(true);
     try {
-      const success = await sendOTP(formattedPhone);
+      // Direct Firebase verification modal validation & dispatch
+      const success = await sendOTP(formattedPhone, recaptchaVerifier.current);
       if (success) {
         navigation.navigate('OTP');
       } else {
         setError('Failed to send verification code. Try again.');
       }
-    } catch {
-      setError('An error occurred. Please check network.');
+    } catch (err: any) {
+      console.warn('Firebase login dispatch error:', err.message);
+      setError(err.message || 'Firebase Auth failed. Check config or console.');
     } finally {
       setIsSubmitLoading(false);
     }
@@ -59,6 +74,13 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
+      {/* Invisible reCAPTCHA webview modal needed for JS SDK phone auth verification */}
+      <FirebaseRecaptchaVerifierModal
+        ref={recaptchaVerifier}
+        firebaseConfig={firebaseConfig}
+        attemptInvisibleVerification={true}
+      />
+
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={[styles.emojiLogo, { color: theme.colors.accent }]}>🛡️</Text>
