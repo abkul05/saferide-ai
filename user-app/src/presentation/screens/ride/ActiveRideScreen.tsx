@@ -19,9 +19,17 @@ const { width } = Dimensions.get('window');
 
 export const ActiveRideScreen: React.FC = () => {
   const theme = useTheme();
-  const { activeRide, driverLocation, deviationAlert, isPanicActive, triggerSOS, cancelActiveRide, clearAlert, plannedRoute } = useRide();
+  const { activeRide, driverLocation, deviationAlert, isPanicActive, triggerSOS, cancelActiveRide, clearAlert, plannedRoute, processPayment, submitReview } = useRide();
   const [isSendingSOS, setIsSendingSOS] = useState(false);
   const mapRef = useRef<any>(null);
+
+  // E2E Payment & Rating workflow states
+  const [selectedMethod, setSelectedMethod] = useState<'CARD' | 'CASH' | 'WALLET' | null>(null);
+  const [rating, setRating] = useState<number>(0);
+  const [comments, setComments] = useState('');
+  const [paymentProcessed, setPaymentProcessed] = useState(false);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [processingState, setProcessingState] = useState(false);
 
   // Auto-center map region on active driver movement coordinate updates
   useEffect(() => {
@@ -216,16 +224,112 @@ export const ActiveRideScreen: React.FC = () => {
           </Card.Content>
         </Card>
 
-        {/* Completed End Panel */}
+        {/* Completed E2E Billing & Review Rating overlay panel */}
         {activeRide?.status === 'COMPLETED' ? (
-          <Button
-            mode="contained"
-            onPress={cancelActiveRide}
-            style={[styles.completeButton, { backgroundColor: theme.colors.accent }]}
-            labelStyle={styles.completeButtonLabel}
-          >
-            Return to Dashboard
-          </Button>
+          <Card style={[styles.card, { marginTop: 12, borderColor: theme.colors.accent, borderWidth: 1 }]} mode="outlined">
+            <Card.Content>
+              <Text style={[styles.phaseTitle, { textAlign: 'center' }]}>Ride Completed! 🎉</Text>
+              
+              {!paymentProcessed ? (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={styles.helperText}>Select payment method for the fare of ${activeRide.fare.toFixed(2)}:</Text>
+                  
+                  <View style={styles.paymentMethodsRow}>
+                    {['CARD', 'WALLET', 'CASH'].map((m) => (
+                      <Button
+                        key={m}
+                        mode={selectedMethod === m ? 'contained' : 'outlined'}
+                        onPress={() => setSelectedMethod(m as any)}
+                        style={styles.paymentMethodBtn}
+                        labelStyle={{ fontSize: 11 }}
+                      >
+                        {m}
+                      </Button>
+                    ))}
+                  </View>
+
+                  <Button
+                    mode="contained"
+                    onPress={async () => {
+                      if (!selectedMethod) return;
+                      setProcessingState(true);
+                      const success = await processPayment(activeRide.id, selectedMethod, activeRide.fare);
+                      setProcessingState(false);
+                      if (success) setPaymentProcessed(true);
+                    }}
+                    loading={processingState}
+                    disabled={!selectedMethod || processingState}
+                    style={[styles.actionBtn, { marginTop: 16, backgroundColor: theme.colors.primary }]}
+                  >
+                    Confirm Payment
+                  </Button>
+                </View>
+              ) : !reviewSubmitted ? (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={styles.helperText}>How was your experience? Rate your SafeRide Pilot:</Text>
+                  
+                  <View style={styles.starsRow}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <TouchableOpacity key={star} onPress={() => setRating(star)}>
+                        <Text style={{ fontSize: 32, marginHorizontal: 4 } as any}>
+                          {star <= rating ? '⭐' : '☆'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <TextInput
+                    label="Share feedback (optional)"
+                    placeholder="e.g. Felt very safe, great driving!"
+                    value={comments}
+                    onChangeText={setComments}
+                    mode="outlined"
+                    multiline
+                    numberOfLines={3}
+                    style={{ marginVertical: 12 }}
+                  />
+
+                  <Button
+                    mode="contained"
+                    onPress={async () => {
+                      if (rating === 0) return;
+                      setProcessingState(true);
+                      const success = await submitReview(activeRide.id, rating, comments);
+                      setProcessingState(false);
+                      if (success) setReviewSubmitted(true);
+                    }}
+                    loading={processingState}
+                    disabled={rating === 0 || processingState}
+                    style={[styles.actionBtn, { backgroundColor: theme.colors.accent }]}
+                  >
+                    Submit Review
+                  </Button>
+                </View>
+              ) : (
+                <View style={{ marginTop: 12, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 24, marginBottom: 8 } as any}>✅</Text>
+                  <Text style={[styles.helperText, { textAlign: 'center' }]}>
+                    Thank you for choosing SafeRide AI! Your journey safety logs are archived.
+                  </Text>
+                  
+                  <Button
+                    mode="contained"
+                    onPress={() => {
+                      setPaymentProcessed(false);
+                      setReviewSubmitted(false);
+                      setRating(0);
+                      setComments('');
+                      setSelectedMethod(null);
+                      cancelActiveRide();
+                    }}
+                    style={[styles.actionBtn, { marginTop: 16, backgroundColor: theme.colors.primary }]}
+                  >
+                    Return to Dashboard
+                  </Button>
+                </View>
+              )}
+            </Card.Content>
+          </Card>
         ) : null}
       </ScrollView>
     </View>
@@ -456,13 +560,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
-  completeButton: {
+  paymentMethodsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+  },
+  paymentMethodBtn: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginVertical: 10,
+  },
+  actionBtn: {
     paddingVertical: 6,
     borderRadius: 8,
-    marginTop: 10,
   },
-  completeButtonLabel: {
-    fontSize: 15,
-    fontWeight: '700',
+  phaseTitle: {
+    fontSize: 16,
+    fontWeight: '800',
   },
 });

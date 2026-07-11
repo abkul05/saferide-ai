@@ -32,6 +32,8 @@ interface RideContextType {
   cancelActiveRide: () => void;
   fetchRideHistory: () => Promise<void>;
   clearAlert: () => void;
+  processPayment: (rideId: string, paymentMethod: string, amount: number) => Promise<boolean>;
+  submitReview: (rideId: string, rating: number, comments: string) => Promise<boolean>;
 }
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
@@ -234,6 +236,26 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ]);
   };
 
+  const processPayment = async (rideId: string, paymentMethod: string, amount: number): Promise<boolean> => {
+    setIsLoading(true);
+    const res = await apiCall('/payments/process', 'POST', { rideId, paymentMethod, amount });
+    setIsLoading(false);
+    return res.success;
+  };
+
+  const submitReview = async (rideId: string, rating: number, comments: string): Promise<boolean> => {
+    if (!activeRide || !activeRide.driver) return false;
+    setIsLoading(true);
+    const res = await apiCall('/reviews', 'POST', {
+      rideId,
+      revieweeId: activeRide.driver.userId,
+      rating,
+      comments
+    });
+    setIsLoading(false);
+    return res.success;
+  };
+
   const clearAlert = () => {
     setDeviationAlert(null);
   };
@@ -254,6 +276,8 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
         cancelActiveRide,
         fetchRideHistory,
         clearAlert,
+        processPayment,
+        submitReview,
       }}
     >
       {children}
