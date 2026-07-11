@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { apiCall } from '../../data/api';
 import { socketClient } from '../../data/socket';
+import { getDirections, RouteInfo } from '../../data/maps';
 
 export interface IRide {
   id: string;
@@ -9,6 +10,7 @@ export interface IRide {
   dropoff: { address: string; location: { coordinates: number[] } };
   fare: number;
   otpCode: string;
+  plannedRouteGeometry?: string;
   driver?: {
     userId: string;
     vehicle: { make: string; model: string; color: string; plateNumber: string };
@@ -23,6 +25,8 @@ interface RideContextType {
   isPanicActive: boolean;
   rideHistory: any[];
   isLoading: boolean;
+  plannedRoute: RouteInfo | null;
+  calculatePlannedRoute: (pickupCoords: { latitude: number; longitude: number }, dropoffCoords: { latitude: number; longitude: number }) => Promise<RouteInfo | null>;
   requestRide: (pickupAddr: string, pickupCoords: number[], dropoffAddr: string, dropoffCoords: number[]) => Promise<boolean>;
   triggerSOS: () => Promise<boolean>;
   cancelActiveRide: () => void;
@@ -39,19 +43,19 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isPanicActive, setIsPanicActive] = useState<boolean>(false);
   const [rideHistory, setRideHistory] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  
+  // Stores currently queried routing path details
+  const [plannedRoute, setPlannedRoute] = useState<RouteInfo | null>(null);
 
   // Sync Socket.IO listeners based on ride state transitions
   useEffect(() => {
     if (activeRide) {
-      // Connect and register event hooks
       socketClient.connect().then(() => {
-        // Track live coordinates updates from driver
         socketClient.on('ride:location_stream', (data: { coordinates: number[] }) => {
           const [lng, lat] = data.coordinates;
           setDriverLocation({ latitude: lat, longitude: lng });
         });
 
-        // Track changes to the ride status (e.g. accepted, started, completed)
         socketClient.on('ride:status_updated', (data: any) => {
           setActiveRide((prev) => {
             if (!prev) return null;
@@ -65,16 +69,15 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (data.status === 'COMPLETED') {
             socketClient.disconnect();
             setDriverLocation(null);
+            setPlannedRoute(null);
             fetchRideHistory();
           }
         });
 
-        // Track route deviation alert alarms emitted by backend AI checks
         socketClient.on('safety:route_deviation_alert', (data: { message: string }) => {
           setDeviationAlert(data.message);
         });
 
-        // Track SOS active alert broadcasts
         socketClient.on('safety:panic_alert', () => {
           setIsPanicActive(true);
         });
@@ -88,6 +91,26 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [activeRide]);
 
+  /**
+   * Queries Google Directions API and populates path polyline state
+   */
+  const calculatePlannedRoute = async (
+    pickupCoords: { latitude: number; longitude: number },
+    dropoffCoords: { latitude: number; longitude: number }
+  ): Promise<RouteInfo | null> => {
+    setIsLoading(true);
+    try {
+      const route = await getDirections(pickupCoords, dropoffCoords);
+      setPlannedRoute(route);
+      setIsLoading(false);
+      return route;
+    } catch (error) {
+      console.error("Error calculating planned route:", error);
+      setIsLoading(false);
+      return null;
+    }
+  };
+
   const requestRide = async (
     pickupAddr: string,
     pickupCoords: number[], // [lng, lat]
@@ -98,6 +121,11 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setDeviationAlert(null);
     setIsPanicActive(false);
 
+    // Transform planned route coordinates to backend GeoJSON schema: [[longitude, latitude], ...]
+    const backendCoords = plannedRoute 
+      ? plannedRoute.coordinates.map(c => [c.longitude, c.latitude])
+      : [];
+
     const res = await apiCall('/rides/request', 'POST', {
       pickup: {
         address: pickupAddr,
@@ -107,6 +135,8 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
         address: dropoffAddr,
         location: { type: 'Point', coordinates: dropoffCoords },
       },
+      plannedRouteGeometry: plannedRoute?.encodedPolyline,
+      plannedRouteCoordinates: backendCoords
     });
 
     if (res.success && res.ride) {
@@ -117,12 +147,12 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dropoff: res.ride.dropoff,
         fare: res.ride.fare,
         otpCode: res.ride.otpCode,
+        plannedRouteGeometry: res.ride.plannedRouteGeometry
       });
       setIsLoading(false);
       
       // MOCK DRIVER TELEMETRY SIMULATOR FOR TEST
-      // If no driver accepts the ride within 5 seconds, we mock the matching accept
-      // This is crucial to demonstrate matching lifecycle flow inside sandboxed environments!
+      // Triggers mock match acceptance if no live driver matches
       setTimeout(async () => {
         setActiveRide((prev) => {
           if (prev && prev.status === 'REQUESTED') {
@@ -139,37 +169,33 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return prev;
         });
         
-        // Start simulated GPS navigation feed from 100m away to dropoff
-        let step = 0;
-        const interval = setInterval(() => {
-          setActiveRide((prev) => {
-            if (!prev || prev.status === 'COMPLETED') {
-              clearInterval(interval);
+        // Start simulated GPS navigation feed along our decoded planned route coords!
+        if (plannedRoute && plannedRoute.coordinates.length > 0) {
+          let step = 0;
+          const routePoints = plannedRoute.coordinates;
+          const interval = setInterval(() => {
+            setActiveRide((prev) => {
+              if (!prev || prev.status === 'COMPLETED') {
+                clearInterval(interval);
+                return prev;
+              }
+              
+              const currentPt = routePoints[Math.min(step, routePoints.length - 1)];
+              setDriverLocation({ latitude: currentPt.latitude, longitude: currentPt.longitude });
+              
+              // Trigger a mock route deviation warning event at step 8
+              if (step === 8) {
+                setDeviationAlert('Simulation Warning: Vehicle has deviated 620m from the planned route.');
+              }
+              
+              step++;
+              if (step >= routePoints.length) {
+                clearInterval(interval);
+              }
               return prev;
-            }
-            
-            // Move driver towards pickup first, then dropoff
-            const progress = step / 10;
-            const start = prev.pickup.location.coordinates;
-            const end = prev.dropoff.location.coordinates;
-            const currentLng = start[0] + (end[0] - start[0]) * progress;
-            const currentLat = start[1] + (end[1] - start[1]) * progress;
-            
-            setDriverLocation({ latitude: currentLat, longitude: currentLng });
-            
-            // Check for mock deviation triggers during testing simulation (step 5)
-            if (step === 5) {
-              // Simulate a deviation alert event!
-              setDeviationAlert('Simulation Warning: Vehicle has deviated 620m from the planned route.');
-            }
-            
-            step++;
-            if (step > 10) {
-              clearInterval(interval);
-            }
-            return prev;
-          });
-        }, 4000);
+            });
+          }, 3000);
+        }
 
       }, 5000);
 
@@ -197,10 +223,10 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setDriverLocation(null);
     setDeviationAlert(null);
     setIsPanicActive(false);
+    setPlannedRoute(null);
   };
 
   const fetchRideHistory = async () => {
-    // In production, hits ride history API endpoint. Here we supply clean mock data.
     setRideHistory([
       { id: '1', date: 'Jul 05, 2026', fare: 18.50, status: 'COMPLETED', safety: 'SAFE', pickup: 'Brooklyn', dropoff: 'Manhattan' },
       { id: '2', date: 'Jul 02, 2026', fare: 12.00, status: 'COMPLETED', safety: 'SAFE', pickup: 'Queens', dropoff: 'Astoria' },
@@ -221,6 +247,8 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isPanicActive,
         rideHistory,
         isLoading,
+        plannedRoute,
+        calculatePlannedRoute,
         requestRide,
         triggerSOS,
         cancelActiveRide,

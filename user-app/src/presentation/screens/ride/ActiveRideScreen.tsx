@@ -1,38 +1,127 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, ScrollView, Modal, Vibration } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, View, ScrollView, Modal, Vibration, Platform, Dimensions } from 'react-native';
 import { Text, Button, Card, useTheme, ActivityIndicator } from 'react-native-paper';
 import { useRide } from '../../context/RideContext';
 
+// Conditionally import react-native-maps to avoid crashes on web
+let MapView: any = null;
+let Marker: any = null;
+let Polyline: any = null;
+
+if (Platform.OS !== 'web') {
+  const Maps = require('react-native-maps');
+  MapView = Maps.default;
+  Marker = Maps.Marker;
+  Polyline = Maps.Polyline;
+}
+
+const { width } = Dimensions.get('window');
+
 export const ActiveRideScreen: React.FC = () => {
   const theme = useTheme();
-  const { activeRide, driverLocation, deviationAlert, isPanicActive, triggerSOS, cancelActiveRide, clearAlert } = useRide();
+  const { activeRide, driverLocation, deviationAlert, isPanicActive, triggerSOS, cancelActiveRide, clearAlert, plannedRoute } = useRide();
   const [isSendingSOS, setIsSendingSOS] = useState(false);
+  const mapRef = useRef<any>(null);
+
+  // Auto-center map region on active driver movement coordinate updates
+  useEffect(() => {
+    if (mapRef.current && driverLocation) {
+      mapRef.current.animateToRegion({
+        ...driverLocation,
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008
+      }, 1000);
+    }
+  }, [driverLocation]);
 
   const handlePanicButton = async () => {
     setIsSendingSOS(true);
-    // Vibrate device to confirm press
-    Vibration.vibrate([0, 500, 100, 500]);
+    Vibration.vibrate([0, 500, 100, 500]); // Pulse vibrations pattern
     await triggerSOS();
     setIsSendingSOS(false);
   };
 
+  // Convert schema [lng, lat] coordinate formats to maps API {latitude, longitude} format
+  const getCoordinatesObject = (coordinatesArray: number[]) => {
+    return {
+      latitude: coordinatesArray[1],
+      longitude: coordinatesArray[0]
+    };
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Visual Tracking Map Simulation */}
-      <View style={[styles.mapSection, { backgroundColor: theme.colors.outline }]}>
-        <Text style={styles.mapIcon}>🛡️</Text>
-        <Text style={styles.mapTitle}>SafeRide AI Active Guard</Text>
-        {driverLocation ? (
-          <Text style={styles.coordinatesText}>
-            Driver Stream Coordinates: [{driverLocation.longitude.toFixed(5)}, {driverLocation.latitude.toFixed(5)}]
-          </Text>
-        ) : (
-          <Text style={styles.coordinatesText}>Awaiting active GPS coordinates stream...</Text>
-        )}
-        
-        {/* Animated radar rings simulation */}
-        <View style={styles.radarRing} />
-      </View>
+      
+      {/* Google Map Panel Section (with Web fallback) */}
+      {Platform.OS !== 'web' && MapView && activeRide ? (
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          initialRegion={{
+            latitude: activeRide.pickup.location.coordinates[1],
+            longitude: activeRide.pickup.location.coordinates[0],
+            latitudeDelta: 0.015,
+            longitudeDelta: 0.015
+          }}
+          userInterfaceStyle="dark"
+        >
+          {/* Pickup Pin */}
+          <Marker
+            coordinate={getCoordinatesObject(activeRide.pickup.location.coordinates)}
+            title="Pickup Location"
+          >
+            <View style={styles.markerContainer}>
+              <Text style={styles.markerIcon}>👤</Text>
+            </View>
+          </Marker>
+
+          {/* Dropoff Pin */}
+          <Marker
+            coordinate={getCoordinatesObject(activeRide.dropoff.location.coordinates)}
+            title="Dropoff Destination"
+          >
+            <View style={[styles.markerContainer, { backgroundColor: '#F87171' }]}>
+              <Text style={styles.markerIcon}>🏁</Text>
+            </View>
+          </Marker>
+
+          {/* Live Driver Pin (Moves along coordinates updates streamed from context socket listeners) */}
+          {driverLocation && (
+            <Marker
+              coordinate={driverLocation}
+              title="Driver Location"
+              description="SafeRide AI Pilot"
+            >
+              <View style={[styles.markerContainer, { backgroundColor: '#34D399', width: 36, height: 36, borderRadius: 18 }]}>
+                <Text style={[styles.markerIcon, { fontSize: 16 }]}>🚕</Text>
+              </View>
+            </Marker>
+          )}
+
+          {/* Route path Polyline draw */}
+          {plannedRoute && (
+            <Polyline
+              coordinates={plannedRoute.coordinates}
+              strokeColor={theme.colors.secondary}
+              strokeWidth={4}
+            />
+          )}
+        </MapView>
+      ) : (
+        // Web Platform Visual simulation Fallback Panel
+        <View style={[styles.mapPlaceholder, { backgroundColor: theme.colors.outline }]}>
+          <Text style={styles.mapIcon}>🛡️</Text>
+          <Text style={styles.mapTitle}>SafeRide AI Active Tracking Guard</Text>
+          {driverLocation ? (
+            <Text style={styles.coordinatesText}>
+              Driver Coordinates Stream: [{driverLocation.longitude.toFixed(5)}, {driverLocation.latitude.toFixed(5)}]
+            </Text>
+          ) : (
+            <Text style={styles.coordinatesText}>Awaiting active GPS coordinates stream...</Text>
+          )}
+          <View style={styles.radarRing} />
+        </View>
+      )}
 
       {/* Safety Status Notification Banner */}
       {deviationAlert ? (
@@ -147,7 +236,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  mapSection: {
+  map: {
+    width: width,
+    height: 280,
+  },
+  markerContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderColor: '#FFFFFF',
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    elevation: 4,
+  },
+  markerIcon: {
+    fontSize: 14,
+  },
+  mapPlaceholder: {
     height: 280,
     justifyContent: 'center',
     alignItems: 'center',
