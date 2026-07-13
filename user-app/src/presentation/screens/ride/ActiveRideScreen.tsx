@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, ScrollView, Modal, Vibration, Platform, Dimensions } from 'react-native';
-import { Text, Button, Card, useTheme, ActivityIndicator } from 'react-native-paper';
+import { StyleSheet, View, ScrollView, Modal, Vibration, Platform, Dimensions, TouchableOpacity } from 'react-native';
+import { Text, Button, Card, useTheme, ActivityIndicator, TextInput } from 'react-native-paper';
 import { useRide } from '../../context/RideContext';
+import { Accelerometer } from 'expo-sensors';
+import { Audio } from 'expo-av';
 
 // Conditionally import react-native-maps to avoid crashes on web
 let MapView: any = null;
@@ -31,6 +33,93 @@ export const ActiveRideScreen: React.FC = () => {
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [processingState, setProcessingState] = useState(false);
 
+  // AI Safety Guardian sensor states
+  const [isRecording, setIsRecording] = useState(false);
+  const audioRecordingRef = useRef<Audio.Recording | null>(null);
+
+  // Starts silent audio evidence collection
+  const startAudioEvidenceRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (permission.status !== 'granted') return;
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      audioRecordingRef.current = newRecording;
+      setIsRecording(true);
+      console.log('Ambience Audio Evidence recording started silently...');
+    } catch (err) {
+      console.warn('Audio recording failed to start:', err);
+    }
+  };
+
+  // Stops audio evidence recording
+  const stopAudioEvidenceRecording = async () => {
+    try {
+      if (audioRecordingRef.current) {
+        await audioRecordingRef.current.stopAndUnloadAsync();
+        const uri = audioRecordingRef.current.getURI();
+        console.log('Audio Evidence saved locally at:', uri);
+        audioRecordingRef.current = null;
+        setIsRecording(false);
+      }
+    } catch (err) {
+      console.warn('Audio recording failed to stop:', err);
+    }
+  };
+
+  const handlePanicButton = async () => {
+    setIsSendingSOS(true);
+    Vibration.vibrate([0, 500, 100, 500]); // Pulse vibrations pattern
+    await triggerSOS();
+    setIsSendingSOS(false);
+  };
+
+  // Hardware sensors: Listen for Shake Gestures & Trigger Auto-Recordings on Warnings
+  useEffect(() => {
+    let accelerometerSubscription: any = null;
+
+    if (Platform.OS !== 'web') {
+      accelerometerSubscription = Accelerometer.addListener(data => {
+        const { x, y, z } = data;
+        const totalAcceleration = Math.sqrt(x * x + y * y + z * z);
+        
+        // Shake force threshold (G units) representing sudden danger shakes
+        if (totalAcceleration > 2.8) {
+          console.warn('Physical shake anomaly detected! Force:', totalAcceleration);
+          Vibration.vibrate(800);
+          handlePanicButton();
+        }
+      });
+      Accelerometer.setUpdateInterval(100);
+    }
+
+    return () => {
+      if (accelerometerSubscription) {
+        accelerometerSubscription.remove();
+      }
+    };
+  }, []);
+
+  // Auto Audio recording trigger based on route deviation warnings
+  useEffect(() => {
+    if (deviationAlert) {
+      startAudioEvidenceRecording();
+    } else {
+      stopAudioEvidenceRecording();
+    }
+
+    return () => {
+      stopAudioEvidenceRecording();
+    };
+  }, [deviationAlert]);
+
   // Auto-center map region on active driver movement coordinate updates
   useEffect(() => {
     if (mapRef.current && driverLocation) {
@@ -41,13 +130,6 @@ export const ActiveRideScreen: React.FC = () => {
       }, 1000);
     }
   }, [driverLocation]);
-
-  const handlePanicButton = async () => {
-    setIsSendingSOS(true);
-    Vibration.vibrate([0, 500, 100, 500]); // Pulse vibrations pattern
-    await triggerSOS();
-    setIsSendingSOS(false);
-  };
 
   // Convert schema [lng, lat] coordinate formats to maps API {latitude, longitude} format
   const getCoordinatesObject = (coordinatesArray: number[]) => {
@@ -220,6 +302,18 @@ export const ActiveRideScreen: React.FC = () => {
               labelStyle={styles.sosButtonLabel}
             >
               {isPanicActive ? '🔴 SOS TRIGGERED' : '🚨 ACTIVATE SOS PANIC'}
+            </Button>
+
+            <Button
+              mode="outlined"
+              onPress={() => {
+                console.log("Simulating Voice SOS trigger: Shouting 'HELP'...");
+                handlePanicButton();
+              }}
+              style={{ marginTop: 8, borderColor: theme.colors.error }}
+              labelStyle={{ fontSize: 11, color: theme.colors.error }}
+            >
+              🎙️ Simulate Voice SOS Keyword ('HELP')
             </Button>
           </Card.Content>
         </Card>

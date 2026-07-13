@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { HomeScreen } from '../screens/home/HomeScreen';
 import { HistoryScreen } from '../screens/history/HistoryScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
+import { GuardianDashboardScreen } from '../screens/home/GuardianDashboardScreen';
 
 // Simple text icons or standard unicode mock to avoid physical package vector dependency crashes
 const TabIcon = ({ name, color, size }: { name: string; color: string; size: number }) => {
@@ -15,6 +16,9 @@ const TabIcon = ({ name, color, size }: { name: string; color: string; size: num
       break;
     case 'History':
       symbol = '🕒';
+      break;
+    case 'Guardian':
+      symbol = '🛡️';
       break;
     case 'Profile':
       symbol = '👤';
@@ -34,6 +38,7 @@ const NativeEmojiIcon = (emoji: string) => {
 export type HomeTabParamList = {
   HomeMain: undefined;
   History: undefined;
+  Guardian: undefined;
   Profile: undefined;
 };
 
@@ -80,11 +85,19 @@ export const HomeNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
+        name="Guardian"
+        component={GuardianDashboardScreen}
+        options={{
+          tabBarLabel: 'Guardian',
+          tabBarIcon: NativeEmojiIcon('🛡️'),
+        }}
+      />
+      <Tab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{
-          tabBarLabel: 'Safety Panel',
-          tabBarIcon: NativeEmojiIcon('🛡️'),
+          tabBarLabel: 'Contacts',
+          tabBarIcon: NativeEmojiIcon('👤'),
         }}
       />
     </Tab.Navigator>

@@ -1,12 +1,15 @@
 import { Router } from 'express';
-import { requestRide, acceptRide, startRide, completeRide, triggerPanic } from '../controllers/ride.controller';
+import { requestRide, acceptRide, startRide, completeRide, triggerPanic, shareRide } from '../controllers/ride.controller';
 import { authenticateJWT, requireRole } from '../middleware/auth';
 import { UserRole } from '../constants/status';
 import { validateBody, rideRequestRule } from '../middleware/validator';
 
 const router = Router();
 
-// Apply JWT authentication globally to all ride operations
+// Public Guardian tracking endpoint (unauthenticated)
+router.get('/share/:rideId', shareRide);
+
+// Apply JWT authentication to rest of the ride operations
 router.use(authenticateJWT);
 
 router.post('/request', requireRole(UserRole.PASSENGER), validateBody(rideRequestRule), requestRide);
