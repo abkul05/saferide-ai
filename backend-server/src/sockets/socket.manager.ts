@@ -20,6 +20,8 @@ export class SocketManager {
 
   public initialize(server: HTTPServer): void {
     this.io = new Server(server, {
+      pingTimeout: 5000,
+      pingInterval: 10000,
       cors: {
         origin: '*',
         methods: ['GET', 'POST'],
