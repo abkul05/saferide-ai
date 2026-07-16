@@ -1,7 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-// @ts-ignore: Firebase React Native entrypoint lacks direct type declarations
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth/react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAuth } from 'firebase/auth';
 
 // Replace these values with your Firebase Project Configuration keys
 const firebaseConfig = {
@@ -16,10 +14,8 @@ const firebaseConfig = {
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firebase Auth with React Native Persistence (persistent login state support)
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
+// Initialize standard Firebase Auth (avoiding persistence registration bugs in Hermes)
+const auth = getAuth(app);
 
 export { app, auth };
 export default app;
