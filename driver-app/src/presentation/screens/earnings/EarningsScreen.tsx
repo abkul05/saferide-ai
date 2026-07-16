@@ -45,7 +45,7 @@ export const EarningsScreen: React.FC = () => {
       <Card style={styles.statsCard} mode="elevated">
         <Card.Content style={styles.statsContent}>
           <Text style={styles.statsLabel}>Total Balance</Text>
-          <Text style={[styles.statsBalance, { color: theme.colors.accent }]}>
+          <Text style={[styles.statsBalance, { color: theme.colors.primary }]}>
             ${earnings.toFixed(2)}
           </Text>
           <View style={styles.divider} />

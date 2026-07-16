@@ -20,7 +20,7 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [isSubmitLoading, setIsSubmitLoading] = useState(false);
 
   const validatePhone = (phone: string): boolean => {
-    const phoneRegex = /^\+[1-9]\d{1,14}$/;
+    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
     return phoneRegex.test(phone);
   };
 
@@ -34,7 +34,7 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
     }
 
     if (!validatePhone(formattedPhone)) {
-      setError('Invalid format. Use country code (e.g., +15550199)');
+      setError('Invalid format. E.g. +16505553434 or 9876543210');
       return;
     }
 
@@ -60,7 +60,7 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
     >
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={[styles.emojiLogo, { color: theme.colors.accent }]}>🚕</Text>
+          <Text style={[styles.emojiLogo, { color: theme.colors.primary }]}>🚕</Text>
           <Text style={styles.brandTitle}>SafeRide Driver</Text>
           <Text style={styles.subtitle}>Securing passenger journeys with verified driver partners</Text>
         </View>

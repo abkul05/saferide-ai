@@ -34,7 +34,7 @@ export const DashboardScreen: React.FC = () => {
               <Switch
                 value={isOnline}
                 onValueChange={toggleOnline}
-                color={theme.colors.accent}
+                color={theme.colors.primary}
               />
             </View>
           </Card.Content>
@@ -44,11 +44,11 @@ export const DashboardScreen: React.FC = () => {
       {/* Incoming Request Alert bottom sheet overlay */}
       {incomingRequest ? (
         <View style={styles.alertSheet}>
-          <Card style={[styles.alertCard, { borderColor: theme.colors.accent, borderWidth: 1 }]} mode="elevated">
+          <Card style={[styles.alertCard, { borderColor: theme.colors.primary, borderWidth: 1 }]} mode="elevated">
             <Card.Content>
               <View style={styles.alertHeader}>
                 <Text style={styles.alertTitle}>⚡ New Booking Request</Text>
-                <Text style={[styles.alertFare, { color: theme.colors.accent }]}>
+                <Text style={[styles.alertFare, { color: theme.colors.primary }]}>
                   ${incomingRequest.fare.toFixed(2)}
                 </Text>
               </View>
@@ -71,7 +71,7 @@ export const DashboardScreen: React.FC = () => {
                 <Button
                   mode="contained"
                   onPress={acceptRequest}
-                  style={[styles.acceptBtn, { backgroundColor: theme.colors.accent }]}
+                  style={[styles.acceptBtn, { backgroundColor: theme.colors.primary }]}
                 >
                   Accept & Navigate
                 </Button>

@@ -140,7 +140,7 @@ export const NavigationScreen: React.FC = () => {
                 onPress={handleStartRide}
                 loading={isLoading}
                 disabled={isLoading}
-                style={[styles.actionBtn, { backgroundColor: theme.colors.accent }]}
+                style={[styles.actionBtn, { backgroundColor: theme.colors.primary }]}
               >
                 Verify & Start Journey
               </Button>
