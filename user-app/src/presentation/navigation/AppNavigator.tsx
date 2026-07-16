@@ -5,12 +5,14 @@ import { useRide } from '../context/RideContext';
 import { AuthNavigator } from './AuthNavigator';
 import { HomeNavigator } from './HomeNavigator';
 import { ActiveRideScreen } from '../screens/ride/ActiveRideScreen';
+import { SearchScreen } from '../screens/home/SearchScreen';
 import { ActivityIndicator, View } from 'react-native';
 
 export type AppStackParamList = {
   Auth: undefined;
   Home: undefined;
   ActiveRide: undefined;
+  Search: undefined;
 };
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
@@ -39,7 +41,10 @@ export const AppNavigator: React.FC = () => {
         // If an active ride exists, lock passenger to the Tracking screen to ensure safety!
         <Stack.Screen name="ActiveRide" component={ActiveRideScreen} />
       ) : (
-        <Stack.Screen name="Home" component={HomeNavigator} />
+        <>
+          <Stack.Screen name="Home" component={HomeNavigator} />
+          <Stack.Screen name="Search" component={SearchScreen} />
+        </>
       )}
     </Stack.Navigator>
   );

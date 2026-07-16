@@ -17,8 +17,13 @@ export interface IRide extends Document {
   dropoff: ILocationPoint;
   plannedRouteGeometry?: string; // Encoded polyline string
   plannedRouteCoordinates?: number[][]; // Decoded points [[lng, lat], ...]
+  rideType: string;
+  distance: number;
   fare: number;
   otpCode: string; // Dynamic OTP for starting the ride safely
+  paymentMethod: string;
+  startTime?: Date;
+  endTime?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -64,8 +69,13 @@ const rideSchema = new Schema<IRide>({
     type: [[Number]], // Array of [longitude, latitude] pairs
     default: []
   },
+  rideType: { type: String, required: true, default: 'Sedan' },
+  distance: { type: Number, required: true, default: 0 },
   fare: { type: Number, required: true },
-  otpCode: { type: String, required: true }
+  otpCode: { type: String, required: true },
+  paymentMethod: { type: String, required: true, default: 'CASH' },
+  startTime: { type: Date },
+  endTime: { type: Date }
 }, {
   timestamps: true
 });

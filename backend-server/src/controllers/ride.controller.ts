@@ -27,7 +27,7 @@ export const requestRide = async (
       throw new AppError('User session not found', 401);
     }
 
-    const { pickup, dropoff } = req.body;
+    const { pickup, dropoff, rideType, fare, paymentMethod, distance } = req.body;
 
     const passengerId = req.user.id;
 
@@ -37,15 +37,13 @@ export const requestRide = async (
       dropoff.location.coordinates
     );
 
-    // Rate: Base $5.00 + $1.50 per km
-    const distanceKm = distanceMeters / 1000;
-    const fare = Math.max(5.00, Number((5.00 + distanceKm * 1.50).toFixed(2)));
+    const distanceKm = distance || distanceMeters / 1000;
+    const finalFare = fare || Math.max(5.00, Number((5.00 + distanceKm * 1.50).toFixed(2)));
 
     // Generate dynamic OTP code for start verification
     const otpCode = generateOTP();
 
     // Create interpolation path between pickup and dropoff for mock route coordinates
-    // In production, coordinates are populated from the Google Maps Directions API polyline decode
     const plannedRouteCoordinates: number[][] = [];
     const steps = 10;
     const [pLng, pLat] = pickup.location.coordinates;
@@ -63,20 +61,24 @@ export const requestRide = async (
       status: RideStatus.REQUESTED,
       pickup,
       dropoff,
-      fare,
+      rideType: rideType || 'Sedan',
+      distance: Number(distanceKm.toFixed(2)),
+      fare: finalFare,
       otpCode,
+      paymentMethod: paymentMethod || 'CASH',
       plannedRouteCoordinates
     });
 
     logger.info(`Ride request created: ${ride._id} for passenger ${passengerId}`);
 
     // Broadcast request to nearby available drivers
-    // For this prototype, we broadcast to the general online drivers namespace
     socketManager.broadcastToDrivers('ride:request_broadcast', {
       rideId: ride._id,
       pickup: ride.pickup,
       dropoff: ride.dropoff,
       fare: ride.fare,
+      rideType: ride.rideType,
+      distance: ride.distance
     });
 
     res.status(201).json({
@@ -444,6 +446,117 @@ export const shareRide = async (
       </body>
       </html>
     `);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const searchPlaces = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const query = (req.query.q as string) || '';
+    if (!query) {
+      res.status(200).json({ success: true, predictions: [] });
+      return;
+    }
+
+    const key = process.env.GOOGLE_MAPS_API_KEY;
+    if (key) {
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${key}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      res.status(200).json({ success: true, predictions: data.predictions || [] });
+    } else {
+      const mockPlaces = [
+        { description: 'Astoria, Queens, NY, USA', place_id: 'astoria_mock', terms: [{ value: 'Astoria' }] },
+        { description: 'Grand Central Terminal, New York, NY, USA', place_id: 'gct_mock', terms: [{ value: 'Grand Central' }] },
+        { description: 'Central Park, New York, NY, USA', place_id: 'cp_mock', terms: [{ value: 'Central Park' }] },
+        { description: 'Times Square, New York, NY, USA', place_id: 'ts_mock', terms: [{ value: 'Times Square' }] },
+        { description: 'JFK International Airport, Queens, NY, USA', place_id: 'jfk_mock', terms: [{ value: 'JFK Airport' }] },
+        { description: 'Brooklyn Bridge Park, Brooklyn, NY, USA', place_id: 'bbp_mock', terms: [{ value: 'Brooklyn Bridge' }] }
+      ];
+      
+      const filtered = mockPlaces.filter(p => p.description.toLowerCase().includes(query.toLowerCase()));
+      res.status(200).json({
+        success: true,
+        predictions: filtered
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const estimateRide = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { pickupCoords, dropoffCoords } = req.body; // [lng, lat]
+
+    if (!pickupCoords || !dropoffCoords || pickupCoords.length !== 2 || dropoffCoords.length !== 2) {
+      throw new AppError('Valid pickupCoords and dropoffCoords arrays [longitude, latitude] are required', 400);
+    }
+
+    const distanceMeters = getHaversineDistance(pickupCoords, dropoffCoords);
+    const distanceKm = Number((distanceMeters / 1000).toFixed(2));
+
+    const rideTypesList = [
+      { type: 'Bike', name: 'SafeRide Bike', capacity: 1, base: 2.00, rate: 0.50, rating: 4.8, image: '🏍️' },
+      { type: 'Auto', name: 'SafeRide Auto', capacity: 3, base: 3.00, rate: 0.80, rating: 4.5, image: '🛺' },
+      { type: 'Mini', name: 'SafeRide Mini', capacity: 4, base: 4.00, rate: 1.00, rating: 4.6, image: '🚗' },
+      { type: 'Sedan', name: 'SafeRide Sedan', capacity: 4, base: 5.00, rate: 1.20, rating: 4.7, image: '🚘' },
+      { type: 'SUV', name: 'SafeRide SUV', capacity: 6, base: 8.00, rate: 1.80, rating: 4.8, image: '🚙' },
+      { type: 'Premium', name: 'SafeRide Premium', capacity: 4, base: 12.00, rate: 2.50, rating: 4.9, image: '🏎️' }
+    ];
+
+    const estimates = rideTypesList.map(item => {
+      const fare = Math.max(item.base, Number((item.base + distanceKm * item.rate).toFixed(2)));
+      const eta = Math.max(2, Math.round(3 + Math.random() * 8));
+      return {
+        rideType: item.type,
+        name: item.name,
+        capacity: item.capacity,
+        rating: item.rating,
+        fare,
+        eta,
+        image: item.image
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      distance: distanceKm,
+      estimates
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getRideHistory = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError('User session not found', 401);
+    }
+
+    const userId = req.user.id;
+    const rides = await Ride.find({
+      $or: [{ passengerId: userId }, { driverId: userId }]
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      rides
+    });
   } catch (error) {
     next(error);
   }

@@ -38,6 +38,9 @@ interface RideContextType {
   verifyRazorpayPayment: (rideId: string, razorpayPaymentId: string, razorpayOrderId: string, razorpaySignature: string) => Promise<boolean>;
   fetchInvoiceHTML: (paymentId: string) => Promise<string | null>;
   requestRefund: (paymentId: string, amount?: number) => Promise<boolean>;
+  searchPlacesList: (q: string) => Promise<any[]>;
+  estimateRideFares: (pickupCoords: number[], dropoffCoords: number[]) => Promise<{ success: boolean; estimates?: any[]; distance?: number }>;
+  requestSelectedRide: (pickup: any, dropoff: any, rideType: string, fare: number, paymentMethod: string, distance: number) => Promise<boolean>;
 }
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
@@ -301,6 +304,60 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res.success;
   };
 
+  const searchPlacesList = async (q: string): Promise<any[]> => {
+    try {
+      const res = await apiCall(`/rides/places/search?q=${encodeURIComponent(q)}`, 'GET');
+      return res.success ? res.predictions : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const estimateRideFares = async (
+    pickupCoords: number[],
+    dropoffCoords: number[]
+  ): Promise<{ success: boolean; estimates?: any[]; distance?: number }> => {
+    try {
+      setIsLoading(true);
+      const res = await apiCall('/rides/estimate', 'POST', { pickupCoords, dropoffCoords });
+      setIsLoading(false);
+      return res;
+    } catch {
+      setIsLoading(false);
+      return { success: false };
+    }
+  };
+
+  const requestSelectedRide = async (
+    pickup: any,
+    dropoff: any,
+    rideType: string,
+    fare: number,
+    paymentMethod: string,
+    distance: number
+  ): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      const res = await apiCall('/rides/request', 'POST', {
+        pickup,
+        dropoff,
+        rideType,
+        fare,
+        paymentMethod,
+        distance
+      });
+      setIsLoading(false);
+      if (res.success && res.ride) {
+        setActiveRide(res.ride);
+        return true;
+      }
+      return false;
+    } catch {
+      setIsLoading(false);
+      return false;
+    }
+  };
+
   const clearAlert = () => {
     setDeviationAlert(null);
   };
@@ -327,6 +384,9 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
         verifyRazorpayPayment,
         fetchInvoiceHTML,
         requestRefund,
+        searchPlacesList,
+        estimateRideFares,
+        requestSelectedRide,
       }}
     >
       {children}
