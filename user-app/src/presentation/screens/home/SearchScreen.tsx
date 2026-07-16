@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, FlatList, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, View, FlatList, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { Text, TextInput, Card, useTheme, List, Divider, Button } from 'react-native-paper';
 import { useRide } from '../../context/RideContext';
 import { useNavigation } from '@react-navigation/native';

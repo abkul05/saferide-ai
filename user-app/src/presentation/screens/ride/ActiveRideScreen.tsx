@@ -239,7 +239,7 @@ export const ActiveRideScreen: React.FC = () => {
             <Card.Content style={styles.otpContent}>
               <Text style={styles.otpHeader}>Verify Ride Start</Text>
               <Text style={styles.otpText}>Provide this OTP code to the driver:</Text>
-              <Text style={[styles.otpCode, { color: theme.colors.accent }]}>{activeRide.otpCode}</Text>
+              <Text style={[styles.otpCode, { color: theme.colors.primary }]}>{activeRide.otpCode}</Text>
             </Card.Content>
           </Card>
         ) : null}
@@ -272,7 +272,7 @@ export const ActiveRideScreen: React.FC = () => {
           <Card.Content>
             <View style={styles.statusRow}>
               <Text style={styles.statusLabel}>Ride Status:</Text>
-              <Text style={[styles.statusValue, { color: activeRide?.status === 'IN_PROGRESS' ? theme.colors.accent : theme.colors.secondary }]}>
+              <Text style={[styles.statusValue, { color: activeRide?.status === 'IN_PROGRESS' ? theme.colors.primary : theme.colors.secondary }]}>
                 {activeRide?.status}
               </Text>
             </View>
@@ -320,7 +320,7 @@ export const ActiveRideScreen: React.FC = () => {
 
         {/* Completed E2E Billing & Review Rating overlay panel */}
         {activeRide?.status === 'COMPLETED' ? (
-          <Card style={[styles.card, { marginTop: 12, borderColor: theme.colors.accent, borderWidth: 1 }]} mode="outlined">
+          <Card style={[styles.card, { marginTop: 12, borderColor: theme.colors.primary, borderWidth: 1 }]} mode="outlined">
             <Card.Content>
               <Text style={[styles.phaseTitle, { textAlign: 'center' }]}>Ride Completed! 🎉</Text>
               
@@ -423,7 +423,7 @@ export const ActiveRideScreen: React.FC = () => {
                     }}
                     loading={processingState}
                     disabled={rating === 0 || processingState}
-                    style={[styles.actionBtn, { backgroundColor: theme.colors.accent }]}
+                    style={[styles.actionBtn, { backgroundColor: theme.colors.primary }]}
                   >
                     Submit Review
                   </Button>
@@ -704,5 +704,12 @@ const styles = StyleSheet.create({
   phaseTitle: {
     fontSize: 16,
     fontWeight: '800',
+  },
+  card: {
+    borderRadius: 12,
+  },
+  helperText: {
+    fontSize: 13,
+    color: '#8E8E93',
   },
 });

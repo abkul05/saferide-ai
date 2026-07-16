@@ -101,7 +101,7 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
 
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={[styles.emojiLogo, { color: theme.colors.accent }]}>🛡️</Text>
+          <Text style={[styles.emojiLogo, { color: theme.colors.primary }]}>🛡️</Text>
           <Text style={styles.brandTitle}>SafeRide AI</Text>
           <Text style={styles.subtitle}>Securing passenger journeys with real-time AI safeguards</Text>
         </View>

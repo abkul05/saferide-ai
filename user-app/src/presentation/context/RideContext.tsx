@@ -294,7 +294,7 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     const res = await apiCall(`/payments/invoice/${paymentId}`, 'GET');
     setIsLoading(false);
-    return res;
+    return res as any;
   };
 
   const requestRefund = async (paymentId: string, amount?: number): Promise<boolean> => {
