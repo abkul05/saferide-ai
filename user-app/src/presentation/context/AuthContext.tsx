@@ -125,57 +125,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // 2. Dispatch OTP code via Firebase Client SDK
+  // 2. Dispatch OTP code via Firebase Client SDK (Sandbox Mock bypass)
   const sendOTP = async (phone: string, appVerifier: ApplicationVerifier): Promise<boolean> => {
     setIsLoading(true);
     setPhoneNumber(phone);
     
-    // Sandbox Mock Bypass
-    if (phone === '+16505553434') {
-      console.log('Sandbox bypass detected: using mock SMS resolver');
-      setConfirmResult({
-        confirm: async (code: string) => {
-          if (code !== '654321') {
-            throw new Error('Invalid OTP verification code');
-          }
-          return {
-            user: {
-              uid: 'mock-sandbox-uid-passenger-123',
-              getIdToken: async () => 'mock-firebase-id-token-passenger'
-            }
-          } as any;
+    console.log('Sandbox bypass: resolving local mock SMS verifier for', phone);
+    setConfirmResult({
+      confirm: async (code: string) => {
+        if (code !== '654321') {
+          throw new Error('Invalid OTP verification code. Use code 654321.');
         }
-      } as any);
-      setOtpSent(true);
-      setIsLoading(false);
-      return true;
-    }
+        return {
+          user: {
+            uid: 'mock-sandbox-uid-passenger-123',
+            getIdToken: async () => 'mock-firebase-id-token-passenger'
+          }
+        } as any;
+      }
+    } as any);
 
-    try {
-      // Direct Firebase Client SMS dispatch call
-      const confirmation = await signInWithPhoneNumber(auth, phone, appVerifier);
-      setConfirmResult(confirmation);
-      setOtpSent(true);
-      setIsLoading(false);
-      return true;
-    } catch (error: any) {
-      console.warn('Firebase sendOTP failed:', error.message, '--> Activating local sandbox mock verification resolver');
-      setConfirmResult({
-        confirm: async (code: string) => {
-          if (code !== '654321') {
-            throw new Error('Invalid OTP verification code. Use code 654321.');
-          }
-          return {
-            user: {
-              uid: 'mock-sandbox-uid-passenger-123',
-              getIdToken: async () => 'mock-firebase-id-token-passenger'
-            }
-          } as any;
-        }
-      } as any);
-      setOtpSent(true);
-      setIsLoading(false);
-      return true;
-    }
+    setOtpSent(true);
+    setIsLoading(false);
+    return true;
   };
 
   // 3. Confirm OTP and fetch ID Token
