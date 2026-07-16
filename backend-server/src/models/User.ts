@@ -14,6 +14,12 @@ export interface IUser extends Document {
   role: UserRole;
   emergencyContacts: IEmergencyContact[];
   fcmToken?: string;
+  gender?: string;
+  dob?: string;
+  bloodGroup?: string;
+  profilePicture?: string;
+  homeAddress?: string;
+  workAddress?: string;
   isProfileComplete: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -45,6 +51,12 @@ const userSchema = new Schema<IUser>({
     default: [] 
   },
   fcmToken: { type: String },
+  gender: { type: String, enum: ['Male', 'Female', 'Other', ''] },
+  dob: { type: String },
+  bloodGroup: { type: String },
+  profilePicture: { type: String },
+  homeAddress: { type: String },
+  workAddress: { type: String },
   isProfileComplete: { type: Boolean, default: false }
 }, {
   timestamps: true

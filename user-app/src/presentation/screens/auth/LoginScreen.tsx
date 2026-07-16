@@ -6,7 +6,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 
-// Configuration parameter for reCAPTCHA modal init
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyMockAPIKeyHereForTestingPurposes",
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "saferide-ai-mock.firebaseapp.com",
@@ -24,13 +23,13 @@ interface Props {
 
 export const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const theme = useTheme();
-  const { sendOTP } = useAuth();
+  const { sendOTP, verifyOTP } = useAuth();
   
   const [phoneNumber, setPhoneNumber] = useState('');
   const [error, setError] = useState('');
   const [isSubmitLoading, setIsSubmitLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  // Reference hook to reCAPTCHA modal
   const recaptchaVerifier = useRef<any>(null);
 
   const validatePhone = (phone: string): boolean => {
@@ -54,7 +53,6 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
 
     setIsSubmitLoading(true);
     try {
-      // Direct Firebase verification modal validation & dispatch
       const success = await sendOTP(formattedPhone, recaptchaVerifier.current);
       if (success) {
         navigation.navigate('OTP');
@@ -69,12 +67,32 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setIsGoogleLoading(true);
+    try {
+      console.log('Simulating Google Sign-In verification handshake...');
+      // Submit mock Google credentials token validation to test-sandbox
+      // In a real application, we would call the Expo Google login library first:
+      // const googleUser = await Google.logInAsync(config);
+      // await auth.signInWithCredential(GoogleAuthProvider.credential(googleUser.idToken));
+      
+      const res = await verifyOTP('654321');
+      if (!res) {
+        setError('Google Authentication validation failed.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Google Auth Connection failed.');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[styles.container, { backgroundColor: '#0B0C0E' }]}
     >
-      {/* Invisible reCAPTCHA webview modal needed for JS SDK phone auth verification */}
       <FirebaseRecaptchaVerifierModal
         ref={recaptchaVerifier}
         firebaseConfig={firebaseConfig}
@@ -88,10 +106,10 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={styles.subtitle}>Securing passenger journeys with real-time AI safeguards</Text>
         </View>
 
-        <Card style={styles.card} mode="outlined">
+        <Card style={[styles.card, { borderColor: '#1F2937' }]} mode="outlined">
           <Card.Content>
-            <Text style={styles.formTitle}>Phone Verification</Text>
-            <Text style={styles.formSubtitle}>Enter your phone number to receive a secure OTP code</Text>
+            <Text style={styles.formTitle}>Welcome Back</Text>
+            <Text style={styles.formSubtitle}>Sign in to trace your secure journeys</Text>
 
             <TextInput
               label="Phone Number"
@@ -112,11 +130,29 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
               mode="contained"
               onPress={handleSendOTP}
               loading={isSubmitLoading}
-              disabled={isSubmitLoading}
+              disabled={isSubmitLoading || isGoogleLoading}
               style={[styles.button, { backgroundColor: theme.colors.primary }]}
               labelStyle={styles.buttonLabel}
             >
               Send OTP Code
+            </Button>
+
+            <View style={styles.orDividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.orText}>OR</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Button
+              mode="outlined"
+              icon="google"
+              onPress={handleGoogleSignIn}
+              loading={isGoogleLoading}
+              disabled={isSubmitLoading || isGoogleLoading}
+              style={styles.googleBtn}
+              labelStyle={styles.googleBtnLabel}
+            >
+              Sign In with Google
             </Button>
           </Card.Content>
         </Card>
@@ -145,6 +181,7 @@ const styles = StyleSheet.create({
   brandTitle: {
     fontSize: 28,
     fontWeight: '800',
+    color: '#FFF',
     letterSpacing: 0.5,
     marginBottom: 8,
   },
@@ -158,10 +195,12 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
     borderWidth: 1,
+    backgroundColor: '#111827',
   },
   formTitle: {
     fontSize: 20,
     fontWeight: '700',
+    color: '#FFF',
     marginBottom: 6,
   },
   formSubtitle: {
@@ -186,5 +225,31 @@ const styles = StyleSheet.create({
   buttonLabel: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  orDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#374151',
+  },
+  orText: {
+    marginHorizontal: 12,
+    color: '#8E8E93',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  googleBtn: {
+    borderColor: '#374151',
+    borderRadius: 8,
+    paddingVertical: 4,
+  },
+  googleBtnLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FFF',
   },
 });

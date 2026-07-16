@@ -46,18 +46,32 @@ export const updateProfile = async (
       throw new AppError('User session not found', 401);
     }
 
-    const { fullName, email } = req.body;
+    const { fullName, email, gender, dob, bloodGroup, profilePicture, homeAddress, workAddress } = req.body;
 
     const user = await User.findById(req.user.id);
     if (!user) {
       throw new AppError('User not found', 404);
     }
 
-    if (fullName) user.fullName = fullName;
-    if (email) user.email = email;
+    if (fullName !== undefined) user.fullName = fullName;
+    if (email !== undefined) user.email = email;
+    if (gender !== undefined) user.gender = gender;
+    if (dob !== undefined) user.dob = dob;
+    if (bloodGroup !== undefined) user.bloodGroup = bloodGroup;
+    if (profilePicture !== undefined) user.profilePicture = profilePicture;
+    if (homeAddress !== undefined) user.homeAddress = homeAddress;
+    if (workAddress !== undefined) user.workAddress = workAddress;
     
-    // Auto-mark profile complete if we have name & email
-    if (user.fullName && user.email) {
+    // Validate profile completeness
+    if (
+      user.fullName && 
+      user.email && 
+      user.gender && 
+      user.dob && 
+      user.bloodGroup && 
+      user.homeAddress && 
+      user.workAddress
+    ) {
       user.isProfileComplete = true;
     }
 

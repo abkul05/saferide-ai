@@ -34,6 +34,22 @@ export const profileSetupRule: ValidationRule = (body) => {
   if (!body.email || typeof body.email !== 'string' || !emailRegex.test(body.email)) {
     return 'email is required and must be a valid email address.';
   }
+  if (!body.gender || !['Male', 'Female', 'Other'].includes(body.gender)) {
+    return 'gender is required and must be Male, Female, or Other.';
+  }
+  if (!body.dob || typeof body.dob !== 'string' || body.dob.trim() === '') {
+    return 'dob (date of birth) is required.';
+  }
+  const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+  if (!body.bloodGroup || !bloodGroups.includes(body.bloodGroup)) {
+    return 'bloodGroup is required and must be a valid blood group (e.g. O+, A-).';
+  }
+  if (!body.homeAddress || typeof body.homeAddress !== 'string' || body.homeAddress.trim() === '') {
+    return 'homeAddress is required.';
+  }
+  if (!body.workAddress || typeof body.workAddress !== 'string' || body.workAddress.trim() === '') {
+    return 'workAddress is required.';
+  }
   return null;
 };
 

@@ -24,6 +24,12 @@ export interface IUser {
   role: 'PASSENGER' | 'DRIVER' | 'ADMIN';
   isProfileComplete: boolean;
   emergencyContacts: IEmergencyContact[];
+  gender?: string;
+  dob?: string;
+  bloodGroup?: string;
+  profilePicture?: string;
+  homeAddress?: string;
+  workAddress?: string;
 }
 
 interface AuthContextType {
@@ -34,7 +40,16 @@ interface AuthContextType {
   phoneNumber: string;
   sendOTP: (phone: string, appVerifier: ApplicationVerifier) => Promise<boolean>;
   verifyOTP: (code: string) => Promise<boolean>;
-  completeProfile: (name: string, email: string) => Promise<boolean>;
+  completeProfile: (profileData: {
+    fullName: string;
+    email: string;
+    gender: string;
+    dob: string;
+    bloodGroup: string;
+    profilePicture?: string;
+    homeAddress: string;
+    workAddress: string;
+  }) => Promise<boolean>;
   updateEmergencyContacts: (contacts: IEmergencyContact[]) => Promise<boolean>;
   logout: () => Promise<void>;
 }
@@ -170,9 +185,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const completeProfile = async (name: string, email: string): Promise<boolean> => {
+  const completeProfile = async (profileData: {
+    fullName: string;
+    email: string;
+    gender: string;
+    dob: string;
+    bloodGroup: string;
+    profilePicture?: string;
+    homeAddress: string;
+    workAddress: string;
+  }): Promise<boolean> => {
     setIsLoading(true);
-    const res = await apiCall('/users/profile', 'PUT', { fullName: name, email });
+    const res = await apiCall('/users/profile', 'PUT', profileData);
     
     if (res.success && res.user) {
       setUser(res.user);
