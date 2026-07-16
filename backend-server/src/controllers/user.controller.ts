@@ -162,3 +162,38 @@ export const registerDriver = async (
     next(error);
   }
 };
+
+export const updateFcmToken = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError('User session not found', 401);
+    }
+
+    const { fcmToken } = req.body;
+    if (!fcmToken) {
+      throw new AppError('fcmToken parameter is required', 400);
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    user.fcmToken = fcmToken;
+    await user.save();
+
+    logger.info(`FCM Token updated successfully for user ${user._id}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'FCM Token updated successfully',
+      fcmToken: user.fcmToken
+    });
+  } catch (error) {
+    next(error);
+  }
+};

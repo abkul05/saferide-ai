@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { Ride } from '../models/Ride';
 import { Driver } from '../models/Driver';
+import { User } from '../models/User';
 import { logger } from '../config/logger';
 import { AppError } from '../middleware/errorHandler';
 import { AuthenticatedRequest } from '../middleware/auth';
@@ -9,6 +10,7 @@ import { getHaversineDistance, safetyService } from '../services/safety.service'
 import { socketManager } from '../sockets/socket.manager';
 import { calculateSafetyScore } from '../services/guardian.service';
 import { SafetyAlert } from '../models/SafetyAlert';
+import { notificationService } from '../services/notification.service';
 
 // Helper to generate a random 4-digit OTP code
 const generateOTP = (): string => {
@@ -137,6 +139,26 @@ export const acceptRide = async (
       },
     });
 
+    // FCM Notification Trigger: Ride Accepted
+    (async () => {
+      try {
+        const driverUser = await User.findById(driverUserId);
+        const driverName = driverUser?.fullName || 'Verified Pilot';
+        const passenger = await User.findById(ride.passengerId);
+        
+        if (passenger && passenger.fcmToken) {
+          await notificationService.sendRideAccepted(
+            passenger.fcmToken,
+            ride._id.toString(),
+            driverName,
+            driverDetails.vehicle.plateNumber
+          );
+        }
+      } catch (err: any) {
+        logger.error(`FCM sendRideAccepted error: ${err.message}`);
+      }
+    })();
+
     res.status(200).json({
       success: true,
       message: 'Ride accepted successfully',
@@ -261,6 +283,44 @@ export const triggerPanic = async (
         message: 'SOS Panic triggered by passenger. Standard investigation recording active.',
       });
     }
+
+    // FCM Notification Trigger: SOS Alert to Emergency Contacts & Emergency Alert to Driver
+    (async () => {
+      try {
+        const passenger = await User.findById(ride.passengerId);
+        const passengerName = passenger?.fullName || 'A Passenger';
+
+        // 1. Send push to each registered emergency contact who has FCM token
+        if (passenger && passenger.emergencyContacts.length > 0) {
+          const shareUrl = `http://localhost:5000/api/v1/rides/share/${ride._id}`;
+          for (const contact of passenger.emergencyContacts) {
+            const contactUser = await User.findOne({ phoneNumber: contact.phoneNumber });
+            if (contactUser && contactUser.fcmToken) {
+              await notificationService.sendSOSAlert(
+                contactUser.fcmToken,
+                passengerName,
+                ride._id.toString(),
+                shareUrl
+              );
+            }
+          }
+        }
+
+        // 2. Send emergency warning push to driver
+        if (ride.driverId) {
+          const driver = await User.findById(ride.driverId);
+          if (driver && driver.fcmToken) {
+            await notificationService.sendEmergencyAlert(
+              driver.fcmToken,
+              ride._id.toString(),
+              'SOS Panic triggered by passenger! Ambient safety recording active.'
+            );
+          }
+        }
+      } catch (err: any) {
+        logger.error(`FCM triggerPanic notifications dispatch error: ${err.message}`);
+      }
+    })();
 
     res.status(200).json({
       success: true,
