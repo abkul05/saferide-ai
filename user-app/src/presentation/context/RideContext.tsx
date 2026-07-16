@@ -34,6 +34,10 @@ interface RideContextType {
   clearAlert: () => void;
   processPayment: (rideId: string, paymentMethod: string, amount: number) => Promise<boolean>;
   submitReview: (rideId: string, rating: number, comments: string) => Promise<boolean>;
+  createRazorpayOrder: (rideId: string, amount: number) => Promise<{ success: boolean; orderId?: string; keyId?: string; amount?: number }>;
+  verifyRazorpayPayment: (rideId: string, razorpayPaymentId: string, razorpayOrderId: string, razorpaySignature: string) => Promise<boolean>;
+  fetchInvoiceHTML: (paymentId: string) => Promise<string | null>;
+  requestRefund: (paymentId: string, amount?: number) => Promise<boolean>;
 }
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
@@ -256,6 +260,47 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res.success;
   };
 
+  const createRazorpayOrder = async (
+    rideId: string,
+    amount: number
+  ): Promise<{ success: boolean; orderId?: string; keyId?: string; amount?: number }> => {
+    setIsLoading(true);
+    const res = await apiCall('/payments/order', 'POST', { rideId, amount });
+    setIsLoading(false);
+    return res;
+  };
+
+  const verifyRazorpayPayment = async (
+    rideId: string,
+    razorpayPaymentId: string,
+    razorpayOrderId: string,
+    razorpaySignature: string
+  ): Promise<boolean> => {
+    setIsLoading(true);
+    const res = await apiCall('/payments/verify', 'POST', {
+      rideId,
+      razorpayPaymentId,
+      razorpayOrderId,
+      razorpaySignature
+    });
+    setIsLoading(false);
+    return res.success;
+  };
+
+  const fetchInvoiceHTML = async (paymentId: string): Promise<string | null> => {
+    setIsLoading(true);
+    const res = await apiCall(`/payments/invoice/${paymentId}`, 'GET');
+    setIsLoading(false);
+    return res;
+  };
+
+  const requestRefund = async (paymentId: string, amount?: number): Promise<boolean> => {
+    setIsLoading(true);
+    const res = await apiCall('/payments/refund', 'POST', { paymentId, amount });
+    setIsLoading(false);
+    return res.success;
+  };
+
   const clearAlert = () => {
     setDeviationAlert(null);
   };
@@ -278,6 +323,10 @@ export const RideProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearAlert,
         processPayment,
         submitReview,
+        createRazorpayOrder,
+        verifyRazorpayPayment,
+        fetchInvoiceHTML,
+        requestRefund,
       }}
     >
       {children}

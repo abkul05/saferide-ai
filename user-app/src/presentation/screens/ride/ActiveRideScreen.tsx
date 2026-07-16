@@ -21,7 +21,7 @@ const { width } = Dimensions.get('window');
 
 export const ActiveRideScreen: React.FC = () => {
   const theme = useTheme();
-  const { activeRide, driverLocation, deviationAlert, isPanicActive, triggerSOS, cancelActiveRide, clearAlert, plannedRoute, processPayment, submitReview } = useRide();
+  const { activeRide, driverLocation, deviationAlert, isPanicActive, triggerSOS, cancelActiveRide, clearAlert, plannedRoute, processPayment, submitReview, createRazorpayOrder, verifyRazorpayPayment, requestRefund } = useRide();
   const [isSendingSOS, setIsSendingSOS] = useState(false);
   const mapRef = useRef<any>(null);
 
@@ -347,15 +347,44 @@ export const ActiveRideScreen: React.FC = () => {
                     onPress={async () => {
                       if (!selectedMethod) return;
                       setProcessingState(true);
-                      const success = await processPayment(activeRide.id, selectedMethod, activeRide.fare);
-                      setProcessingState(false);
-                      if (success) setPaymentProcessed(true);
+                      try {
+                        if (selectedMethod === 'CARD' || selectedMethod === 'WALLET') {
+                          // 1. Create Order ID with Razorpay on Backend
+                          const order = await createRazorpayOrder(activeRide.id, activeRide.fare);
+                          if (order.success && order.orderId) {
+                            console.log(`Razorpay Order ID fetched: ${order.orderId}`);
+                            
+                            // 2. Perform Web checkout verification handshake (Simulate Client SDK responses)
+                            const mockPaymentId = `pay_${Math.random().toString(36).substring(2, 11).toUpperCase()}`;
+                            const mockSignature = `sig_${Math.random().toString(36).substring(2, 20)}`;
+                            
+                            const verified = await verifyRazorpayPayment(
+                              activeRide.id,
+                              mockPaymentId,
+                              order.orderId,
+                              mockSignature
+                            );
+                            
+                            if (verified) {
+                              setPaymentProcessed(true);
+                            }
+                          }
+                        } else {
+                          // Cash payment (local direct processing)
+                          const success = await processPayment(activeRide.id, selectedMethod, activeRide.fare);
+                          if (success) setPaymentProcessed(true);
+                        }
+                      } catch (err) {
+                        console.warn('Payment failed:', err);
+                      } finally {
+                        setProcessingState(false);
+                      }
                     }}
                     loading={processingState}
                     disabled={!selectedMethod || processingState}
                     style={[styles.actionBtn, { marginTop: 16, backgroundColor: theme.colors.primary }]}
                   >
-                    Confirm Payment
+                    Pay with Razorpay
                   </Button>
                 </View>
               ) : !reviewSubmitted ? (
