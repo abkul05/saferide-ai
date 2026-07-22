@@ -5,12 +5,14 @@ import { useRide } from '../context/RideContext';
 import { AuthNavigator } from './AuthNavigator';
 import { HomeNavigator } from './HomeNavigator';
 import { NavigationScreen } from '../screens/ride/NavigationScreen';
+import { VerificationScreen } from '../screens/auth/VerificationScreen';
 import { ActivityIndicator, View } from 'react-native';
 
 export type AppStackParamList = {
   Auth: undefined;
   Home: undefined;
   ActiveRideNavigation: undefined;
+  Verification: undefined;
 };
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
@@ -32,7 +34,7 @@ export const AppNavigator: React.FC = () => {
       {!isAuthenticated ? (
         <Stack.Screen name="Auth" component={AuthNavigator} />
       ) : !user?.isProfileComplete ? (
-        <Stack.Screen name="Auth" component={AuthNavigator} />
+        <Stack.Screen name="Verification" component={VerificationScreen} />
       ) : activeRide ? (
         // If driver has accepted a ride, lock them in the Active Navigation screen to route safely!
         <Stack.Screen name="ActiveRideNavigation" component={NavigationScreen} />
